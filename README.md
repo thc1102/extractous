@@ -1,3 +1,6 @@
+# 项目声明
+二开 [Extractous](https://github.com/yobix-ai/extractous) 项目，仅供测试使用，不保证可用性
+
 
 <div align="center" style="margin-top: 20px">
     <a href="https://yobix.ai">
@@ -54,10 +57,12 @@ With Extractous, the need for external services or APIs is eliminated, making da
 ## 🌳 Key Features
 * High-performance unstructured data extraction optimized for speed and low memory usage.
 * Clear and simple API for extracting text and metadata content.
-* Automatically identifies document types and extracts content accordingly
+* Automatically identifies document types and extracts content accordingly.
+* **Recursive extraction** of embedded documents (images in Word docs, attachments in PDFs, etc.).
 * Supports [many file formats](#supported-file-formats) (most formats supported by Apache Tika).
 * Extracts text from images and scanned documents with OCR through [tesseract-ocr](https://github.com/tesseract-ocr/tesseract).
-* Core engine written in Rust with bindings for [Python](https://pypi.org/project/extractous/) and upcoming support for JavaScript/TypeScript.
+* Control over **embedded document extraction** with configurable depth and options.
+* Core engine written in Rust with bindings for [Python](https://pypi.org/project/extractous/) (3.8-3.13) and upcoming support for JavaScript/TypeScript.
 * Detailed documentation and examples to help you get started quickly and efficiently.
 * Free for Commercial Use: Apache 2.0 License.
 
@@ -116,10 +121,38 @@ You need to have Tesseract installed with the language pack. For example on debi
 from extractous import Extractor, TesseractOcrConfig
 
 extractor = Extractor().set_ocr_config(TesseractOcrConfig().set_language("deu"))
-result, metadata = extractor.extract_file_to_string("../../test_files/documents/eng-ocr.pdf")
+result, metadata = extractor.extract_file_to_string("document-with-images.pdf")
 
 print(result)
 print(metadata)
+```
+
+* Recursively extract all embedded documents:
+
+Extract all embedded documents recursively (e.g., images in Word documents, attachments in PDFs):
+
+```python
+from extractous import Extractor
+
+# Create extractor
+extractor = Extractor()
+
+# Recursively extract all embedded documents
+result = extractor.extract_file_recursive("document-with-attachments.docx")
+
+# Access the container document
+container = result.container()
+print("Container content:", container.content)
+print("Container metadata:", container.metadata)
+
+# Access all embedded documents
+for i, doc in enumerate(result.embedded_documents()):
+    print(f"\nEmbedded document {i + 1}:")
+    print("Content:", doc.content[:100])  # First 100 chars
+    print("Metadata:", doc.metadata)
+
+# Total document count (container + embedded)
+print(f"\nTotal documents: {result.total_count}")
 ```
 
 #### Rust
@@ -193,6 +226,39 @@ fn main() {
   let (content, metadata) = extractor.extract_file_to_string(file_path).unwrap();
   println!("{}", content);
   println!("{:?}", metadata);
+}
+```
+
+* Recursively extract all embedded documents
+
+Extract all embedded documents recursively (e.g., images in Word documents, attachments in PDFs):
+
+```rust
+use extractous::Extractor;
+
+fn main() {
+  let file_path = "../test_files/documents/embedded-docs.docx";
+
+  let extractor = Extractor::new();
+  
+  // Recursively extract all documents
+  let result = extractor.extract_file_recursive(file_path).unwrap();
+  
+  // Access the container document
+  if let Some(container) = result.container() {
+      println!("Container content: {}", container.content);
+      println!("Container metadata: {:?}", container.metadata);
+  }
+  
+  // Access all embedded documents
+  for (i, doc) in result.embedded_documents().iter().enumerate() {
+      println!("\nEmbedded document {}: ", i + 1);
+      println!("Content: {}", &doc.content[..100.min(doc.content.len())]);
+      println!("Metadata: {:?}", doc.metadata);
+  }
+  
+  // Total document count
+  println!("\nTotal documents: {}", result.total_count());
 }
 ```
 

@@ -11,9 +11,16 @@ To install the extractous Python bindings, you can use pip:
 pip install extractous
 ```
 
+## Requirements
+
+- **Python**: 3.8 - 3.13
+- **Platforms**: Linux (x86_64, aarch64), Windows (x64), macOS (coming soon)
+
 ## Usage
 
-Extracting a file to string:
+### Basic Text Extraction
+
+Extract a file to string:
 
 ```python
 from extractous import Extractor
@@ -30,7 +37,9 @@ print(result)
 print(metadata)
 ```
 
-Extracting a file(URL / bytearray) to a buffered stream:
+### Stream-based Extraction
+
+Extract a file (URL / bytearray) to a buffered stream:
 
 ```python
 from extractous import Extractor
@@ -55,14 +64,82 @@ print(result)
 print(metadata)
 ```
 
-Extracting a file with OCR:
+### OCR Support
+
+Extract a file with OCR (Requires Tesseract):
 
 ```python
 from extractous import Extractor, TesseractOcrConfig
 
+# Configure OCR with language
 extractor = Extractor().set_ocr_config(TesseractOcrConfig().set_language("deu"))
-result, metadata = extractor.extract_file_to_string("../../test_files/documents/eng-ocr.pdf")
+result, metadata = extractor.extract_file_to_string("document-with-images.pdf")
 
 print(result)
 print(metadata)
+```
+
+### Recursive Extraction with Embedded Documents
+
+Extract all embedded documents recursively (e.g., images in Word documents, attachments in PDFs):
+
+```python
+from extractous import Extractor
+
+# Create extractor
+extractor = Extractor()
+
+# Recursively extract all embedded documents
+result = extractor.extract_file_recursive("document-with-attachments.docx")
+
+# Access the container document
+container = result.container()
+print("Container content:", container.content)
+print("Container metadata:", container.metadata)
+
+# Access all embedded documents
+for i, doc in enumerate(result.embedded_documents()):
+    print(f"\nEmbedded document {i + 1}:")
+    print("Content:", doc.content[:100])  # First 100 chars
+    print("Metadata:", doc.metadata)
+
+# Total document count (container + embedded)
+print(f"\nTotal documents: {result.total_count}")
+```
+
+### Recursive Extraction with Options
+
+Use options to control extraction behavior:
+
+```python
+from extractous import Extractor
+
+extractor = Extractor()
+
+# Extract with custom max length and XML output
+result = extractor.extract_file_recursive_opt(
+    "large-document.pdf",
+    max_length=10000,  # Limit content length
+    as_xml=True        # Output as XML
+)
+
+# Process documents
+for doc in result.documents:
+    print(f"Content length: {len(doc.content)}")
+    print(f"Metadata: {doc.metadata}")
+```
+
+### Control Embedded Document Extraction
+
+Control whether to extract embedded documents in standard extraction methods:
+
+```python
+from extractous import Extractor
+
+# Enable embedded document extraction globally
+extractor = Extractor().set_extract_embedded(True)
+
+# Now standard extraction methods will also extract embedded content
+reader, metadata = extractor.extract_file("document.docx")
+# This will extract text from images, embedded files, etc.
 ```

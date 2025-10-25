@@ -37,10 +37,10 @@ elif [[ $current_dir =~ ^/workspace ]]; then
     cd /workspace/bindings/extractous-python
 
     for PYBIN in /opt/python/cp38*/bin; do
-        "${PYBIN}/pip" install maturin
         "${PYBIN}/pip" install wheel
+        "${PYBIN}/pip" install maturin
         #"${PYBIN}/maturin" build -i "${PYBIN}/python" --release --out /workspace/bindings/extractous-python/dist --compatibility manylinux_2_34
-        "${PYBIN}/maturin" build --release -i "${PYBIN}/python" --out /workspace/bindings/extractous-python/target/wheels --compatibility manylinux_2_28
+        "${PYBIN}/maturin" build --release -i "${PYBIN}/python" --out /workspace/bindings/extractous-python/target/wheels --compatibility manylinux_2_17
     done
 
 else

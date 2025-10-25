@@ -2,8 +2,9 @@
 
 if [[ $PWD =~ extractous/bindings/extractous-python$ ]]; then
     ROOT_DIR=$(realpath "$PWD/../../")
-    docker build -t manylinux_2_28_graalvm $PWD
-    docker run --rm --mount type=bind,source=$ROOT_DIR,target=/workspace manylinux_2_28_graalvm bash /workspace/bindings/extractous-python/build-wheels.sh
+    # docker build --build-arg HTTP_PROXY="http://172.17.0.1:2080" --build-arg HTTPS_PROXY="http://172.17.0.1:2080" -t manylinux_2_17_graalvm $PWD
+    docker build -t manylinux_2_17_graalvm $PWD
+    docker run --rm --mount type=bind,source=$ROOT_DIR,target=/workspace manylinux_2_17_graalvm bash /workspace/bindings/extractous-python/build-wheels.sh
 
     # reset paemissions
     echo ""

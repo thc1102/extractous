@@ -8,6 +8,55 @@ use strum_macros::{Display, EnumString};
 /// Metadata type alias
 pub type Metadata = HashMap<String, Vec<String>>;
 
+/// 单个文档（容器文档或嵌套文档）
+#[derive(Debug, Clone)]
+pub struct Document {
+    /// 文档内容文本
+    pub content: String,
+    /// 文档元数据
+    pub metadata: Metadata,
+}
+
+impl Document {
+    pub fn new(content: String, metadata: Metadata) -> Self {
+        Self { content, metadata }
+    }
+}
+
+/// 递归提取结果，包含容器文档及其所有嵌套文档
+#[derive(Debug, Clone)]
+pub struct RecursiveExtraction {
+    /// 文档列表：
+    /// - documents[0]: 容器文档本身
+    /// - documents[1..]: 嵌套文档（如附件、嵌入对象等）
+    pub documents: Vec<Document>,
+}
+
+impl RecursiveExtraction {
+    pub fn new(documents: Vec<Document>) -> Self {
+        Self { documents }
+    }
+
+    /// 获取容器文档（第一个文档）
+    pub fn container(&self) -> Option<&Document> {
+        self.documents.first()
+    }
+
+    /// 获取所有嵌套文档（跳过容器）
+    pub fn embedded_documents(&self) -> &[Document] {
+        if self.documents.len() > 1 {
+            &self.documents[1..]
+        } else {
+            &[]
+        }
+    }
+
+    /// 获取文档总数（容器 + 嵌套）
+    pub fn total_count(&self) -> usize {
+        self.documents.len()
+    }
+}
+
 /// CharSet enum of all supported encodings
 #[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, Display, EnumString)]
 #[allow(non_camel_case_types)]
@@ -66,17 +115,19 @@ pub struct Extractor {
     office_config: OfficeParserConfig,
     ocr_config: TesseractOcrConfig,
     xml_output: bool,
+    extract_embedded: bool,
 }
 
 impl Default for Extractor {
     fn default() -> Self {
         Self {
-            extract_string_max_length: 500_000, // 500KB
+            extract_string_max_length: -1, // -1 means no limit
             encoding: CharSet::UTF_8,
             pdf_config: PdfParserConfig::default(),
             office_config: OfficeParserConfig::default(),
             ocr_config: TesseractOcrConfig::default(),
             xml_output: false,
+            extract_embedded: true,
         }
     }
 }
@@ -119,9 +170,16 @@ impl Extractor {
         self
     }
 
-    /// Set the configuration for the parse as xml
+    /// Set the configuration for the parse as xml (global default). Per-call overrides exist via *_opt APIs.
     pub fn set_xml_output(mut self, xml_output: bool) -> Self {
         self.xml_output = xml_output;
+        self
+    }
+
+    /// Set whether to parse embedded documents (global default). Per-call overrides exist via *_opt APIs.
+    /// Default: false
+    pub fn set_extract_embedded(mut self, extract_embedded: bool) -> Self {
+        self.extract_embedded = extract_embedded;
         self
     }
 
@@ -135,6 +193,29 @@ impl Extractor {
             &self.office_config,
             &self.ocr_config,
             self.xml_output,
+            self.extract_embedded,
+        )
+    }
+
+    /// Extracts to stream using optional overrides. If an option is None, uses Extractor defaults.
+    pub fn extract_file_opt(
+        &self,
+        file_path: &str,
+        encoding: Option<CharSet>,
+        as_xml: Option<bool>,
+        extract_embedded: Option<bool>,
+    ) -> ExtractResult<(StreamReader, Metadata)> {
+        let eff_encoding = encoding.unwrap_or(self.encoding);
+        let eff_as_xml = as_xml.unwrap_or(self.xml_output);
+        let eff_extract_embedded = extract_embedded.unwrap_or(self.extract_embedded);
+        tika::parse_file(
+            file_path,
+            &eff_encoding,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            eff_as_xml,
+            eff_extract_embedded,
         )
     }
 
@@ -148,6 +229,29 @@ impl Extractor {
             &self.office_config,
             &self.ocr_config,
             self.xml_output,
+            self.extract_embedded,
+        )
+    }
+
+    /// Extracts bytes to stream using optional overrides. If an option is None, uses Extractor defaults.
+    pub fn extract_bytes_opt(
+        &self,
+        buffer: &[u8],
+        encoding: Option<CharSet>,
+        as_xml: Option<bool>,
+        extract_embedded: Option<bool>,
+    ) -> ExtractResult<(StreamReader, Metadata)> {
+        let eff_encoding = encoding.unwrap_or(self.encoding);
+        let eff_as_xml = as_xml.unwrap_or(self.xml_output);
+        let eff_extract_embedded = extract_embedded.unwrap_or(self.extract_embedded);
+        tika::parse_bytes(
+            buffer,
+            &eff_encoding,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            eff_as_xml,
+            eff_extract_embedded,
         )
     }
 
@@ -161,6 +265,29 @@ impl Extractor {
             &self.office_config,
             &self.ocr_config,
             self.xml_output,
+            self.extract_embedded,
+        )
+    }
+
+    /// Extracts url to stream using optional overrides. If an option is None, uses Extractor defaults.
+    pub fn extract_url_opt(
+        &self,
+        url: &str,
+        encoding: Option<CharSet>,
+        as_xml: Option<bool>,
+        extract_embedded: Option<bool>,
+    ) -> ExtractResult<(StreamReader, Metadata)> {
+        let eff_encoding = encoding.unwrap_or(self.encoding);
+        let eff_as_xml = as_xml.unwrap_or(self.xml_output);
+        let eff_extract_embedded = extract_embedded.unwrap_or(self.extract_embedded);
+        tika::parse_url(
+            url,
+            &eff_encoding,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            eff_as_xml,
+            eff_extract_embedded,
         )
     }
 
@@ -174,6 +301,29 @@ impl Extractor {
             &self.office_config,
             &self.ocr_config,
             self.xml_output,
+            self.extract_embedded,
+        )
+    }
+
+    /// String extraction with optional overrides (max_length, as_xml, extract_embedded)
+    pub fn extract_file_to_string_opt(
+        &self,
+        file_path: &str,
+        max_length: Option<i32>,
+        as_xml: Option<bool>,
+        extract_embedded: Option<bool>,
+    ) -> ExtractResult<(String, Metadata)> {
+        let eff_max_length = max_length.unwrap_or(self.extract_string_max_length);
+        let eff_as_xml = as_xml.unwrap_or(self.xml_output);
+        let eff_extract_embedded = extract_embedded.unwrap_or(self.extract_embedded);
+        tika::parse_file_to_string(
+            file_path,
+            eff_max_length,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            eff_as_xml,
+            eff_extract_embedded,
         )
     }
 
@@ -187,9 +337,30 @@ impl Extractor {
             &self.office_config,
             &self.ocr_config,
             self.xml_output,
+            self.extract_embedded,
         )
     }
 
+    pub fn extract_bytes_to_string_opt(
+        &self,
+        buffer: &[u8],
+        max_length: Option<i32>,
+        as_xml: Option<bool>,
+        extract_embedded: Option<bool>,
+    ) -> ExtractResult<(String, Metadata)> {
+        let eff_max_length = max_length.unwrap_or(self.extract_string_max_length);
+        let eff_as_xml = as_xml.unwrap_or(self.xml_output);
+        let eff_extract_embedded = extract_embedded.unwrap_or(self.extract_embedded);
+        tika::parse_bytes_to_string(
+            buffer,
+            eff_max_length,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            eff_as_xml,
+            eff_extract_embedded,
+        )
+    }
     /// Extracts text from a URL. Returns a tuple with string that is of maximum length
     /// of the extractor's `extract_string_max_length` and metadata.
     pub fn extract_url_to_string(&self, url: &str) -> ExtractResult<(String, Metadata)> {
@@ -200,9 +371,136 @@ impl Extractor {
             &self.office_config,
             &self.ocr_config,
             self.xml_output,
+            self.extract_embedded,
         )
     }
 
+    pub fn extract_url_to_string_opt(
+        &self,
+        url: &str,
+        max_length: Option<i32>,
+        as_xml: Option<bool>,
+        extract_embedded: Option<bool>,
+    ) -> ExtractResult<(String, Metadata)> {
+        let eff_max_length = max_length.unwrap_or(self.extract_string_max_length);
+        let eff_as_xml = as_xml.unwrap_or(self.xml_output);
+        let eff_extract_embedded = extract_embedded.unwrap_or(self.extract_embedded);
+        tika::parse_url_to_string(
+            url,
+            eff_max_length,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            eff_as_xml,
+            eff_extract_embedded,
+        )
+    }
+
+    /// 递归提取文件内容，包括所有嵌套文档
+    ///
+    /// 返回 RecursiveExtraction，其中：
+    /// - documents[0] 是容器文档本身
+    /// - documents[1..] 是所有嵌套文档（附件、嵌入对象等）
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use extractous::Extractor;
+    ///
+    /// let extractor = Extractor::new();
+    /// let result = extractor.extract_file_recursive("document.zip").unwrap();
+    ///
+    /// println!("容器文档: {}", result.container().unwrap().content);
+    /// println!("嵌套文档数量: {}", result.embedded_documents().len());
+    ///
+    /// for (i, doc) in result.embedded_documents().iter().enumerate() {
+    ///     println!("嵌套文档 {}: {}", i + 1, doc.content);
+    /// }
+    /// ```
+    pub fn extract_file_recursive(&self, file_path: &str) -> ExtractResult<RecursiveExtraction> {
+        tika::parse_file_recursive(
+            file_path,
+            self.extract_string_max_length,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            self.xml_output,
+        )
+    }
+    pub fn extract_file_recursive_opt(
+        &self,
+        file_path: &str,
+        max_length: Option<i32>,
+        as_xml: Option<bool>,
+    ) -> ExtractResult<RecursiveExtraction> {
+        let eff_max_length = max_length.unwrap_or(self.extract_string_max_length);
+        let eff_as_xml = as_xml.unwrap_or(self.xml_output);
+        tika::parse_file_recursive(
+            file_path,
+            eff_max_length,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            eff_as_xml,
+        )
+    }
+    /// 递归提取字节数组内容，包括所有嵌套文档
+    pub fn extract_bytes_recursive(&self, buffer: &[u8]) -> ExtractResult<RecursiveExtraction> {
+        tika::parse_bytes_recursive(
+            buffer,
+            self.extract_string_max_length,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            self.xml_output,
+        )
+    }
+    pub fn extract_bytes_recursive_opt(
+        &self,
+        buffer: &[u8],
+        max_length: Option<i32>,
+        as_xml: Option<bool>,
+    ) -> ExtractResult<RecursiveExtraction> {
+        let eff_max_length = max_length.unwrap_or(self.extract_string_max_length);
+        let eff_as_xml = as_xml.unwrap_or(self.xml_output);
+        tika::parse_bytes_recursive(
+            buffer,
+            eff_max_length,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            eff_as_xml,
+        )
+    }
+
+    /// 递归提取 URL 内容，包括所有嵌套文档
+    pub fn extract_url_recursive(&self, url: &str) -> ExtractResult<RecursiveExtraction> {
+        tika::parse_url_recursive(
+            url,
+            self.extract_string_max_length,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            self.xml_output,
+        )
+    }
+
+    pub fn extract_url_recursive_opt(
+        &self,
+        url: &str,
+        max_length: Option<i32>,
+        as_xml: Option<bool>,
+    ) -> ExtractResult<RecursiveExtraction> {
+        let eff_max_length = max_length.unwrap_or(self.extract_string_max_length);
+        let eff_as_xml = as_xml.unwrap_or(self.xml_output);
+        tika::parse_url_recursive(
+            url,
+            eff_max_length,
+            &self.pdf_config,
+            &self.office_config,
+            &self.ocr_config,
+            eff_as_xml,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -311,17 +609,11 @@ mod tests {
 
     #[test]
     fn extract_file_to_xml_test() {
-        // Parse the files using extractous
-        let extractor = Extractor::new().set_xml_output(true);
-        let result = extractor.extract_file_to_string(TEST_FILE);
+        // Prefer per-call override for clarity
+        let extractor = Extractor::new();
+        let result = extractor.extract_file_to_string_opt(TEST_FILE, None, Some(true), None);
         let (content, metadata) = result.unwrap();
-        assert!(
-            content.len() > 0,
-            "Metadata should contain at least one entry"
-        );
-        assert!(
-            metadata.len() > 0,
-            "Metadata should contain at least one entry"
-        );
+        assert!(content.len() > 0);
+        assert!(metadata.len() > 0);
     }
 }

@@ -25,7 +25,8 @@ fn extract_p_tag_content(xml: &str) -> String {
                 inside_body = false;
             }
             Ok(Event::Text(e)) if inside_body => {
-                collected_content.push_str(&e.unescape().unwrap().into_owned());
+                let decoded = reader.decoder().decode(e.as_ref()).unwrap();
+                collected_content.push_str(&decoded);
                 collected_content.push('\n'); // Separate paragraphs with newline
             }
             Ok(Event::Eof) => break,

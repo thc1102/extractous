@@ -4,7 +4,7 @@ use crate::errors::ExtractResult;
 use crate::tika::jni_utils::*;
 use crate::tika::wrappers::*;
 use crate::{
-    CharSet, Metadata, OfficeParserConfig, PdfParserConfig, StreamReader, TesseractOcrConfig,
+    CharSet, Metadata, OfficeParserConfig, PdfParserConfig, RecursiveExtraction, StreamReader, TesseractOcrConfig,
 };
 use jni::objects::JValue;
 use jni::{AttachGuard, JavaVM};
@@ -33,6 +33,7 @@ fn parse_to_stream(
     office_conf: &OfficeParserConfig,
     ocr_conf: &TesseractOcrConfig,
     as_xml: bool,
+    as_embedded: bool,
     method_name: &str,
     signature: &str,
 ) -> ExtractResult<(StreamReader, Metadata)> {
@@ -54,6 +55,7 @@ fn parse_to_stream(
             (&j_office_conf.internal).into(),
             (&j_ocr_conf.internal).into(),
             JValue::Bool(if as_xml { 1 } else { 0 }),
+            JValue::Bool(if as_embedded { 1 } else { 0 }),
         ],
     );
     let call_result_obj = call_result?.l()?;
@@ -71,7 +73,8 @@ pub fn parse_file(
     pdf_conf: &PdfParserConfig,
     office_conf: &OfficeParserConfig,
     ocr_conf: &TesseractOcrConfig,
-    as_xml: bool
+    as_xml: bool,
+    as_embedded: bool,
 ) -> ExtractResult<(StreamReader, Metadata)> {
     let mut env = get_vm_attach_current_thread()?;
 
@@ -84,13 +87,14 @@ pub fn parse_file(
         office_conf,
         ocr_conf,
         as_xml,
+        as_embedded,
         "parseFile",
         "(Ljava/lang/String;\
         Ljava/lang/String;\
         Lorg/apache/tika/parser/pdf/PDFParserConfig;\
         Lorg/apache/tika/parser/microsoft/OfficeParserConfig;\
         Lorg/apache/tika/parser/ocr/TesseractOCRConfig;\
-        Z\
+        ZZ\
         )Lai/yobix/ReaderResult;",
     )
 }
@@ -102,6 +106,7 @@ pub fn parse_bytes(
     office_conf: &OfficeParserConfig,
     ocr_conf: &TesseractOcrConfig,
     as_xml: bool,
+    as_embedded: bool,
 ) -> ExtractResult<(StreamReader, Metadata)> {
     let mut env = get_vm_attach_current_thread()?;
 
@@ -119,13 +124,14 @@ pub fn parse_bytes(
         office_conf,
         ocr_conf,
         as_xml,
+        as_embedded,
         "parseBytes",
         "(Ljava/nio/ByteBuffer;\
         Ljava/lang/String;\
         Lorg/apache/tika/parser/pdf/PDFParserConfig;\
         Lorg/apache/tika/parser/microsoft/OfficeParserConfig;\
         Lorg/apache/tika/parser/ocr/TesseractOCRConfig;\
-        Z\
+        ZZ\
         )Lai/yobix/ReaderResult;",
     )
 }
@@ -137,6 +143,7 @@ pub fn parse_url(
     office_conf: &OfficeParserConfig,
     ocr_conf: &TesseractOcrConfig,
     as_xml: bool,
+    as_embedded: bool,
 ) -> ExtractResult<(StreamReader, Metadata)> {
     let mut env = get_vm_attach_current_thread()?;
 
@@ -149,13 +156,14 @@ pub fn parse_url(
         office_conf,
         ocr_conf,
         as_xml,
+        as_embedded,
         "parseUrl",
         "(Ljava/lang/String;\
         Ljava/lang/String;\
         Lorg/apache/tika/parser/pdf/PDFParserConfig;\
         Lorg/apache/tika/parser/microsoft/OfficeParserConfig;\
         Lorg/apache/tika/parser/ocr/TesseractOCRConfig;\
-        Z\
+        ZZ\
         )Lai/yobix/ReaderResult;",
     )
 }
@@ -169,6 +177,7 @@ pub fn parse_to_string(
     office_conf: &OfficeParserConfig,
     ocr_conf: &TesseractOcrConfig,
     as_xml: bool,
+    as_embedded: bool,
     method_name: &str,
     signature: &str,
 ) -> ExtractResult<(String, Metadata)> {
@@ -188,6 +197,7 @@ pub fn parse_to_string(
             (&j_office_conf.internal).into(),
             (&j_ocr_conf.internal).into(),
             JValue::Bool(if as_xml { 1 } else { 0 }),
+            JValue::Bool(if as_embedded { 1 } else { 0 }),
         ],
     );
     let call_result_obj = call_result?.l()?;
@@ -205,6 +215,7 @@ pub fn parse_file_to_string(
     office_conf: &OfficeParserConfig,
     ocr_conf: &TesseractOcrConfig,
     as_xml: bool,
+    as_embedded: bool,
 ) -> ExtractResult<(String, Metadata)> {
     let mut env = get_vm_attach_current_thread()?;
 
@@ -217,13 +228,14 @@ pub fn parse_file_to_string(
         office_conf,
         ocr_conf,
         as_xml,
+        as_embedded,
         "parseFileToString",
         "(Ljava/lang/String;\
         I\
         Lorg/apache/tika/parser/pdf/PDFParserConfig;\
         Lorg/apache/tika/parser/microsoft/OfficeParserConfig;\
         Lorg/apache/tika/parser/ocr/TesseractOCRConfig;\
-        Z\
+        ZZ\
         )Lai/yobix/StringResult;",
     )
 }
@@ -236,6 +248,7 @@ pub fn parse_bytes_to_string(
     office_conf: &OfficeParserConfig,
     ocr_conf: &TesseractOcrConfig,
     as_xml: bool,
+    as_embedded: bool,
 ) -> ExtractResult<(String, Metadata)> {
     let mut env = get_vm_attach_current_thread()?;
 
@@ -253,13 +266,14 @@ pub fn parse_bytes_to_string(
         office_conf,
         ocr_conf,
         as_xml,
+        as_embedded,
         "parseBytesToString",
         "(Ljava/nio/ByteBuffer;\
         I\
         Lorg/apache/tika/parser/pdf/PDFParserConfig;\
         Lorg/apache/tika/parser/microsoft/OfficeParserConfig;\
         Lorg/apache/tika/parser/ocr/TesseractOCRConfig;\
-        Z\
+        ZZ\
         )Lai/yobix/StringResult;",
     )
 }
@@ -272,6 +286,7 @@ pub fn parse_url_to_string(
     office_conf: &OfficeParserConfig,
     ocr_conf: &TesseractOcrConfig,
     as_xml: bool,
+    as_embedded: bool,
 ) -> ExtractResult<(String, Metadata)> {
     let mut env = get_vm_attach_current_thread()?;
 
@@ -284,13 +299,147 @@ pub fn parse_url_to_string(
         office_conf,
         ocr_conf,
         as_xml,
+        as_embedded,
         "parseUrlToString",
         "(Ljava/lang/String;\
         I\
         Lorg/apache/tika/parser/pdf/PDFParserConfig;\
         Lorg/apache/tika/parser/microsoft/OfficeParserConfig;\
         Lorg/apache/tika/parser/ocr/TesseractOCRConfig;\
-        Z\
+        ZZ\
         )Lai/yobix/StringResult;",
+    )
+}
+
+/// 内部通用函数：递归解析文档
+fn parse_recursive(
+    mut env: AttachGuard,
+    data_source_val: JValue,
+    max_length: i32,
+    pdf_conf: &PdfParserConfig,
+    office_conf: &OfficeParserConfig,
+    ocr_conf: &TesseractOcrConfig,
+    as_xml: bool,
+    method_name: &str,
+    signature: &str,
+) -> ExtractResult<RecursiveExtraction> {
+    let j_pdf_conf = JPDFParserConfig::new(&mut env, pdf_conf)?;
+    let j_office_conf = JOfficeParserConfig::new(&mut env, office_conf)?;
+    let j_ocr_conf = JTesseractOcrConfig::new(&mut env, ocr_conf)?;
+
+    // 调用 Java 方法
+    let call_result = jni_call_static_method(
+        &mut env,
+        "ai/yobix/TikaNativeMain",
+        method_name,
+        signature,
+        &[
+            data_source_val,
+            JValue::Int(max_length),
+            (&j_pdf_conf.internal).into(),
+            (&j_office_conf.internal).into(),
+            (&j_ocr_conf.internal).into(),
+            JValue::Bool(if as_xml { 1 } else { 0 }),
+        ],
+    );
+    let call_result_obj = call_result?.l()?;
+
+    // 创建并处理 JRecursiveResult
+    let result = JRecursiveResult::new(&mut env, call_result_obj)?;
+    Ok(result.extraction)
+}
+
+/// 递归解析文件，返回容器文档及所有嵌套文档
+pub fn parse_file_recursive(
+    file_path: &str,
+    max_length: i32,
+    pdf_conf: &PdfParserConfig,
+    office_conf: &OfficeParserConfig,
+    ocr_conf: &TesseractOcrConfig,
+    as_xml: bool,
+) -> ExtractResult<RecursiveExtraction> {
+    let mut env = get_vm_attach_current_thread()?;
+
+    let file_path_val = jni_new_string_as_jvalue(&mut env, file_path)?;
+    parse_recursive(
+        env,
+        (&file_path_val).into(),
+        max_length,
+        pdf_conf,
+        office_conf,
+        ocr_conf,
+        as_xml,
+        "parseFileRecursive",
+        "(Ljava/lang/String;\
+        I\
+        Lorg/apache/tika/parser/pdf/PDFParserConfig;\
+        Lorg/apache/tika/parser/microsoft/OfficeParserConfig;\
+        Lorg/apache/tika/parser/ocr/TesseractOCRConfig;\
+        Z\
+        )Lai/yobix/RecursiveResult;",
+    )
+}
+
+/// 递归解析字节数组，返回容器文档及所有嵌套文档
+pub fn parse_bytes_recursive(
+    buffer: &[u8],
+    max_length: i32,
+    pdf_conf: &PdfParserConfig,
+    office_conf: &OfficeParserConfig,
+    ocr_conf: &TesseractOcrConfig,
+    as_xml: bool,
+) -> ExtractResult<RecursiveExtraction> {
+    let mut env = get_vm_attach_current_thread()?;
+
+    let mut_ptr: *mut u8 = buffer.as_ptr() as *mut u8;
+    let byte_buffer = jni_new_direct_buffer(&mut env, mut_ptr, buffer.len())?;
+
+    parse_recursive(
+        env,
+        (&byte_buffer).into(),
+        max_length,
+        pdf_conf,
+        office_conf,
+        ocr_conf,
+        as_xml,
+        "parseBytesRecursive",
+        "(Ljava/nio/ByteBuffer;\
+        I\
+        Lorg/apache/tika/parser/pdf/PDFParserConfig;\
+        Lorg/apache/tika/parser/microsoft/OfficeParserConfig;\
+        Lorg/apache/tika/parser/ocr/TesseractOCRConfig;\
+        Z\
+        )Lai/yobix/RecursiveResult;",
+    )
+}
+
+/// 递归解析 URL，返回容器文档及所有嵌套文档
+pub fn parse_url_recursive(
+    url: &str,
+    max_length: i32,
+    pdf_conf: &PdfParserConfig,
+    office_conf: &OfficeParserConfig,
+    ocr_conf: &TesseractOcrConfig,
+    as_xml: bool,
+) -> ExtractResult<RecursiveExtraction> {
+    let mut env = get_vm_attach_current_thread()?;
+
+    let url_val = jni_new_string_as_jvalue(&mut env, url)?;
+    parse_recursive(
+        env,
+        (&url_val).into(),
+        max_length,
+        pdf_conf,
+        office_conf,
+        ocr_conf,
+        as_xml,
+        "parseUrlRecursive",
+        "(Ljava/lang/String;\
+        I\
+        Lorg/apache/tika/parser/pdf/PDFParserConfig;\
+        Lorg/apache/tika/parser/microsoft/OfficeParserConfig;\
+        Lorg/apache/tika/parser/ocr/TesseractOCRConfig;\
+        Z\
+        )Lai/yobix/RecursiveResult;",
     )
 }

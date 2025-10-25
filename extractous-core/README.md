@@ -104,6 +104,76 @@ fn main() {
 }
 ```
 
+* Recursively extract all embedded documents (e.g., images in Word documents, attachments in PDFs)
+```rust
+use extractous::Extractor;
+
+fn main() {
+  let file_path = "../test_files/documents/embedded-docs.docx";
+
+  let extractor = Extractor::new();
+  
+  // Recursively extract all documents
+  let result = extractor.extract_file_recursive(file_path).unwrap();
+  
+  // Access the container document
+  if let Some(container) = result.container() {
+      println!("Container content: {}", container.content);
+      println!("Container metadata: {:?}", container.metadata);
+  }
+  
+  // Access all embedded documents
+  for (i, doc) in result.embedded_documents().iter().enumerate() {
+      println!("\nEmbedded document {}: ", i + 1);
+      println!("Content: {}", &doc.content[..100.min(doc.content.len())]);
+      println!("Metadata: {:?}", doc.metadata);
+  }
+  
+  // Total document count
+  println!("\nTotal documents: {}", result.total_count());
+}
+```
+
+* Recursively extract with custom options
+```rust
+use extractous::Extractor;
+
+fn main() {
+  let file_path = "../test_files/documents/large-document.pdf";
+
+  let extractor = Extractor::new();
+  
+  // Extract with custom max length and XML output
+  let result = extractor.extract_file_recursive_opt(
+      file_path,
+      Some(10000),  // max_length
+      Some(true)    // as_xml
+  ).unwrap();
+  
+  // Process all documents
+  for doc in &result.documents {
+      println!("Content length: {}", doc.content.len());
+      println!("Metadata: {:?}", doc.metadata);
+  }
+}
+```
+
+* Control embedded document extraction in standard methods
+```rust
+use extractous::Extractor;
+
+fn main() {
+  let file_path = "../test_files/documents/document-with-images.docx";
+
+  // Enable embedded document extraction globally
+  let extractor = Extractor::new().set_extract_embedded(true);
+  
+  // Standard extraction will now also extract embedded content
+  let (stream, metadata) = extractor.extract_file(file_path).unwrap();
+  // This will extract text from images, embedded files, etc.
+}
+```
+
 
 ## Building
 

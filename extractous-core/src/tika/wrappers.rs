@@ -4,7 +4,7 @@ use crate::tika::jni_utils::{
     jni_tika_metadata_to_rust_metadata,
 };
 use crate::tika::vm;
-use crate::{Metadata, OfficeParserConfig, PdfParserConfig, TesseractOcrConfig, DEFAULT_BUF_SIZE};
+use crate::{Document, Metadata, OfficeParserConfig, PdfParserConfig, RecursiveExtraction, TesseractOcrConfig, DEFAULT_BUF_SIZE};
 use bytemuck::cast_slice_mut;
 use jni::objects::{GlobalRef, JByteArray, JObject, JValue};
 use jni::sys::jsize;
@@ -409,5 +409,71 @@ impl<'local> JTesseractOcrConfig<'local> {
         )?;
 
         Ok(Self { internal: obj })
+    }
+}
+
+/// 包装 Java 类 `ai.yobix.RecursiveResult`
+/// 解析后返回包含多个文档的 RecursiveExtraction
+pub struct JRecursiveResult {
+    pub extraction: RecursiveExtraction,
+}
+
+impl<'local> JRecursiveResult {
+    pub(crate) fn new(env: &mut JNIEnv<'local>, obj: JObject<'local>) -> ExtractResult<Self> {
+        // 1. 检查错误状态
+        let is_error = jni_call_method(env, &obj, "isError", "()Z", &[])?.z()?;
+
+        if is_error {
+            let status = jni_call_method(env, &obj, "getStatus", "()B", &[])?.b()?;
+            let msg_obj = jni_call_method(env, &obj, "getErrorMessage", "()Ljava/lang/String;", &[])?.l()?;
+            let msg = jni_jobject_to_string(env, msg_obj)?;
+            return match status {
+                1 => Err(Error::IoError(msg)),
+                2 => Err(Error::ParseError(msg)),
+                _ => Err(Error::Unknown(msg)),
+            };
+        }
+
+        // 稳妥方案B：仅调用 ai.yobix.RecursiveResult 自身桥接方法，避免 JNI 直接触达 java.util.*
+        // 优先使用数组桥接，避免后续单次 get 调用频繁 JNI 往返
+        let array_obj = jni_call_method(
+            env,
+            &obj,
+            "getMetadataArray",
+            "()[Lorg/apache/tika/metadata/Metadata;",
+            &[],
+        )?.l()?;
+
+        // 将 Java Metadata[] 转换为 Vec<JObject>
+        let j_array = jni::objects::JObjectArray::from(array_obj);
+        let length = env.get_array_length(&j_array)? as usize;
+
+        let mut documents = Vec::with_capacity(length);
+        for i in 0..length {
+            let metadata_obj = env.get_object_array_element(&j_array, i as i32)?;
+
+            // 获取内容字段
+            let content_key = jni_new_string_as_jvalue(env, "X-TIKA:content")?;
+            let content_obj = jni_call_method(
+                env,
+                &metadata_obj,
+                "get",
+                "(Ljava/lang/String;)Ljava/lang/String;",
+                &[(&content_key).into()],
+            )?.l()?;
+
+            let content = if content_obj.is_null() {
+                String::new()
+            } else {
+                jni_jobject_to_string(env, content_obj)?
+            };
+
+            let metadata = jni_tika_metadata_to_rust_metadata(env, metadata_obj)?;
+            documents.push(Document::new(content, metadata));
+        }
+
+        Ok(Self {
+            extraction: RecursiveExtraction::new(documents),
+        })
     }
 }

@@ -55,6 +55,8 @@ pub use config::*;
 fn _extractous(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<CharSet>()?;
     m.add_class::<StreamReader>()?;
+    m.add_class::<PyDocument>()?;
+    m.add_class::<PyRecursiveExtraction>()?;
     m.add_class::<Extractor>()?;
 
     // Config

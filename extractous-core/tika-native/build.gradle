@@ -1,10 +1,11 @@
 plugins {
     id 'java-library'
-    id'org.graalvm.buildtools.native' version '0.10.3' // GraalVM plugin for Gradle
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'org.graalvm.buildtools.native' version '0.10.3' // GraalVM plugin for Gradle
 }
 
 
-def tikaVersion = "2.9.2"
+def tikaVersion = "3.2.3"
 def numThreads = Runtime.getRuntime().availableProcessors()
 def currentOs = org.gradle.internal.os.OperatingSystem.current()
 
@@ -21,17 +22,35 @@ if (currentOs.isLinux()) {
 group = 'ai.yobix'
 version = "tika-$tikaVersion-$osName"
 
+// 设置 Java 版本为 11，确保兼容性
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+// 配置源集：将 GraalVM 专用代码分离到单独的目录
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java', 'src/graalvm/java']
+        }
+    }
+}
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
+    // GraalVM SDK - 使用 compileOnly，只在编译时需要，不会打包进 Shadow JAR
+    // 这样 jar 构建不会包含 GraalVM 依赖，可在任意 JDK 11+ 环境运行
+    compileOnly 'org.graalvm.sdk:nativeimage:24.1.0'
+    
     // Tika uses slf4j, just use a nop logger to ignore all logging
     implementation("org.slf4j:slf4j-nop:2.0.11")
     // Some dependencies use log4j such as poi, route log4j back to slf4j
-    // Had to use 3.0.0-beta2 because it is solves some issues with log4j to make it graalvm native friendly
-    implementation 'org.apache.logging.log4j:log4j-to-slf4j:3.0.0-beta2'
+    // 使用 2.23.1（支持 Java 8+，包括 Java 11）而不是 3.x（需要 Java 17+）
+    implementation 'org.apache.logging.log4j:log4j-to-slf4j:2.23.1'
 
     implementation("org.apache.tika:tika-core:$tikaVersion")
     implementation "org.apache.tika:tika-parsers-standard:$tikaVersion" // Apache Tika parsers
@@ -44,7 +63,6 @@ dependencies {
     implementation "org.apache.tika:tika-parser-cad-module:$tikaVersion"
     implementation "org.apache.tika:tika-parser-crypto-module:$tikaVersion"
     implementation "org.apache.tika:tika-parser-font-module:$tikaVersion"
-    implementation "org.apache.tika:tika-parser-html-commons:$tikaVersion"
     implementation "org.apache.tika:tika-parser-image-module:$tikaVersion"
     implementation "org.apache.tika:tika-parser-mail-module:$tikaVersion"
     implementation "org.apache.tika:tika-parser-miscoffice-module:$tikaVersion"
@@ -54,6 +72,66 @@ dependencies {
     implementation "org.apache.tika:tika-parser-text-module:$tikaVersion"
     implementation "org.apache.tika:tika-parser-xml-module:$tikaVersion"
     implementation "org.apache.tika:tika-parser-webarchive-module:$tikaVersion"
+    implementation 'com.sun.mail:jakarta.mail:2.0.1'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// ============================================================
+// Shadow JAR 配置：构建可在任意 JDK 11+ 环境运行的 Fat JAR
+// ============================================================
+shadowJar {
+    // 设置输出文件名
+    archiveBaseName = 'tika-native'
+    archiveClassifier = 'all'
+    archiveVersion = "tika-$tikaVersion-universal"
+    
+    // 合并 META-INF/services 文件（Tika 使用 SPI 机制）
+    mergeServiceFiles()
+    
+    // 排除 GraalVM 专用类（包含 @CEntryPoint 的类，不能在普通 JDK 环境加载）
+    exclude 'ai/yobix/TikaNativeGraalEntryPoint.class'
+    
+    // 排除签名文件，避免验证失败
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+    
+    // 排除 GraalVM 配置文件（这些只在 Native Image 构建时需要）
+    exclude 'META-INF/ai.yobix/tika-merged-config/**'
+    
+    // 设置 Main-Class（可选）
+    manifest {
+        attributes(
+            'Implementation-Title': 'Tika Native Universal JAR',
+            'Implementation-Version': tikaVersion,
+            'Built-By': System.getProperty('user.name'),
+            'Built-JDK': System.getProperty('java.version')
+        )
+    }
+}
+
+tasks.register('runWithAgentMerge', JavaExec) {
+    group = 'graalvm'
+    description = 'Run with GraalVM tracing agent (merge mode)'
+
+    classpath = sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath
+    mainClass = 'ai.yobix.DebugTest'
+
+    def configDir = "src/main/resources/META-INF/ai.yobix/tika-merged-config"
+
+    jvmArgs = [
+            "-agentlib:native-image-agent=config-merge-dir=${configDir}"
+    ]
+
+    if (project.hasProperty('args')) {
+        args project.property('args').split(',')
+    }
 }
 
 graalvmNative {
@@ -74,7 +152,7 @@ graalvmNative {
             // The --no-fallback option to native-image causes the utility to fail if it can not create the image.
             fallback = false
 
-            configurationFileDirectories.from(file("src/main/resources/META-INF/$group/$version"))
+            configurationFileDirectories.from(file("src/main/resources/META-INF/$group/tika-merged-config"))
 
             buildArgs.addAll(
                     "-H:+AddAllCharsets", // Very important to get UTF8 working

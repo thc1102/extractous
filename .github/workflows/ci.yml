@@ -1,0 +1,202 @@
+# ============================================
+# Python CI 工作流 - 持续集成
+# ============================================
+# 功能：每次代码推送时自动构建和测试
+# 不会发布包，仅验证代码质量
+# 构建策略：仅使用 Python 3.8 构建 wheel（支持 abi3）
+# 测试策略：在 Python 3.8-3.13 上测试安装和运行
+# ============================================
+
+name: CI - Build and Test
+
+# ============================================
+# 触发条件
+# ============================================
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - dev
+
+# ============================================
+# 并发控制
+# ============================================
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ============================================
+# 权限设置
+# ============================================
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    name: Build Linux ${{ matrix.platform.target }} wheels
+    runs-on: ${{ matrix.platform.target == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - target: x86_64
+          - target: aarch64
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --manifest-path bindings/extractous-python/Cargo.toml --release --out bindings/extractous-python/dist -i /opt/python/cp38-cp38/bin/python3.8 --compatibility manylinux_2_17
+          sccache: "false"
+          target: ${{ matrix.platform.target }}
+          container: quay.io/pypa/manylinux2014_${{ matrix.platform.target }}:latest
+          before-script-linux: bash .github/workflows/install-graalvm-tar.sh 23.0.2
+          docker-options: "-e JAVA_HOME=/opt/graalvm -e GRAALVM_HOME=/opt/graalvm"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.platform.target }}
+          path: bindings/extractous-python/dist
+          retention-days: 1
+
+  test-linux:
+    name: Test Linux ${{ matrix.platform.target }} py${{ matrix.python-version }}
+    needs: build-linux
+    runs-on: ${{ matrix.platform.target == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - target: x86_64
+          - target: aarch64
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.platform.target }}
+          path: dist
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt update
+          sudo apt install -y tesseract-ocr tesseract-ocr-deu tesseract-ocr-ara libxml2-dev libxslt1-dev
+
+      - name: Run pytest
+        shell: bash
+        run: |
+          set -e
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install extractous --find-links dist --no-index --force-reinstall
+          pip install pytest scikit-learn lxml
+          cd bindings/extractous-python
+          pytest -s
+
+  build-windows:
+    name: Build Windows ${{ matrix.platform.target }} wheels
+    runs-on: ${{ matrix.platform.runner }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - runner: windows-latest
+            target: x64
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+          architecture: ${{ matrix.platform.target }}
+
+      - name: Install GraalVM
+        uses: graalvm/setup-graalvm@v1.2.5
+        with:
+          java-version: "23"
+          distribution: "graalvm-community"
+          set-java-home: "true"
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          working-directory: "bindings/extractous-python"
+          args: --release --out dist --find-interpreter
+          sccache: "true"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.platform.target }}
+          path: bindings/extractous-python/dist
+          retention-days: 1
+
+  test-windows:
+    name: Test Windows ${{ matrix.platform.target }} py${{ matrix.python-version }}
+    needs: build-windows
+    runs-on: ${{ matrix.platform.runner }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - runner: windows-latest
+            target: x64
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.platform.target }}
+
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.platform.target }}
+          path: dist
+
+      - name: Run pytest
+        run: |
+          python -m venv .venv
+          .venv\Scripts\activate.bat
+          pip install extractous --find-links dist --no-index --force-reinstall
+          pip install pytest scikit-learn lxml
+          cd bindings\extractous-python
+          pytest -s .

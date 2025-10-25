@@ -1,3 +1,5 @@
+import codecs
+
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity as cosine_sim
 from lxml import etree
@@ -24,21 +26,34 @@ def cosine_similarity(text1, text2):
 #     return result
 
 def read_to_string(reader):
-    """Read from stream to string."""
+    """Read from stream to string using an incremental decoder."""
+
+    # 1. 创建一个 UTF-8 增量解码器
+    decoder = codecs.getincrementaldecoder('utf-8')()
+
     utf8_string = []
     buffer = bytearray(4096)
 
     while True:
-        bytes_read = reader.readinto(buffer)
-        # If no more data, exit the loop
+        try:
+            # 假设 reader.readinto 是一个阻塞操作
+            bytes_read = reader.readinto(buffer)
+        except BlockingIOError:
+            # 在非阻塞模式下可能会发生，这里只是示例
+            continue
+
         if bytes_read == 0:
             break
-        # Decode the valid portion of the buffer and append it to the result
-        utf8_string.append(buffer[:bytes_read].decode('utf-8'))
 
-    # Join all parts into a single string
-    return ''.join(utf8_string)
+        # 2. 解码当前块，final=False 告诉解码器后面可能还有数据
+        #    它会自动处理被劈开的字符
+        chunk = buffer[:bytes_read]
+        utf8_string.append(decoder.decode(chunk, final=False))
 
+    # 3. 循环结束后，调用 final=True 来处理流末尾可能剩余的任何字节
+    utf8_string.append(decoder.decode(b'', final=True))
+
+    return "".join(utf8_string)
 
 def read_file_to_bytearray(file_path: str):
     """Read file to bytes array."""
