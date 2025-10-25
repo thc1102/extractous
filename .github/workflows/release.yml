@@ -224,5 +224,4 @@ jobs:
           TWINE_USERNAME: ${{ secrets.GITEA_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.GITEA_TOKEN }}
         run: |
-          # --skip-existing: 跳过已存在的文件，避免409错误导致CI失败
-          twine upload --repository-url ${{ secrets.GITEA_PYPI_URL }} --skip-existing dist/*.whl
+          twine upload --repository-url ${{ secrets.GITEA_PYPI_URL }} dist/*.whl
