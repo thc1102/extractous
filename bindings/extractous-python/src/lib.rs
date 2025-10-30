@@ -65,5 +65,9 @@ fn _extractous(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<OfficeParserConfig>()?;
     m.add_class::<TesseractOcrConfig>()?;
 
+    // JVM memory management functions
+    m.add_function(wrap_pyfunction!(get_jvm_memory_usage, m)?)?;
+    m.add_function(wrap_pyfunction!(trigger_jvm_gc, m)?)?;
+
     Ok(())
 }

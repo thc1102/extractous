@@ -535,4 +535,81 @@ public class TikaNativeMain {
         }
     }
 
+    /**
+     * Gets current JVM memory usage statistics.
+     * Returns a StringResult containing JSON-formatted memory info:
+     * {
+     *   "usedMemoryMB": current used memory in MB,
+     *   "freeMemoryMB": current free memory in MB,
+     *   "totalMemoryMB": total allocated memory in MB,
+     *   "maxMemoryMB": maximum memory available to JVM in MB,
+     *   "usagePercent": percentage of used memory relative to max
+     * }
+     *
+     * @return StringResult with memory statistics or error
+     */
+    public static StringResult getMemoryUsage() {
+        try {
+            Runtime runtime = Runtime.getRuntime();
+            long mb = 1024 * 1024;
+
+            long totalMemory = runtime.totalMemory();
+            long freeMemory = runtime.freeMemory();
+            long maxMemory = runtime.maxMemory();
+            long usedMemory = totalMemory - freeMemory;
+
+            double usedMB = (double) usedMemory / mb;
+            double freeMB = (double) freeMemory / mb;
+            double totalMB = (double) totalMemory / mb;
+            double maxMB = (double) maxMemory / mb;
+            double usagePercent = (double) usedMemory / maxMemory * 100;
+
+            // Build JSON-like string (simple format, no external JSON library needed)
+            String result = String.format(
+                "{\"usedMemoryMB\":%.2f,\"freeMemoryMB\":%.2f,\"totalMemoryMB\":%.2f,\"maxMemoryMB\":%.2f,\"usagePercent\":%.2f}",
+                usedMB, freeMB, totalMB, maxMB, usagePercent
+            );
+
+            return new StringResult(result, new Metadata());
+
+        } catch (Exception e) {
+            return new StringResult((byte) 1, "Failed to get memory usage: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Triggers Java garbage collection manually.
+     * NOTE: This is a suggestion to the JVM, not a guarantee that GC will run immediately.
+     * Use sparingly as it may impact performance.
+     *
+     * @return StringResult with success message or error
+     */
+    public static StringResult triggerGarbageCollection() {
+        try {
+            long beforeMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+            // Suggest GC (twice for better effect)
+            System.gc();
+            System.gc();
+
+            // Give GC some time to run (optional, may block briefly)
+            Thread.sleep(100);
+
+            long afterMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+            long freedMB = (beforeMemory - afterMemory) / (1024 * 1024);
+
+            String result = String.format(
+                "{\"success\":true,\"freedMemoryMB\":%d,\"beforeMB\":%d,\"afterMB\":%d}",
+                freedMB,
+                beforeMemory / (1024 * 1024),
+                afterMemory / (1024 * 1024)
+            );
+
+            return new StringResult(result, new Metadata());
+
+        } catch (Exception e) {
+            return new StringResult((byte) 1, "Failed to trigger GC: " + e.getMessage());
+        }
+    }
+
 }

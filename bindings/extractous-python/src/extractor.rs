@@ -579,3 +579,62 @@ fn recursive_to_py(
     }
     Ok(out)
 }
+
+/// Get JVM memory usage statistics
+///
+/// Returns a dictionary with memory information:
+/// - usedMemoryMB: Current used memory in MB
+/// - freeMemoryMB: Current free memory in MB
+/// - totalMemoryMB: Total allocated memory in MB
+/// - maxMemoryMB: Maximum memory available to JVM in MB
+/// - usagePercent: Percentage of used memory relative to max
+///
+/// # Example
+/// ```python
+/// from extractous import get_jvm_memory_usage
+///
+/// memory_info = get_jvm_memory_usage()
+/// print(f"Used: {memory_info['usedMemoryMB']:.2f} MB")
+/// print(f"Usage: {memory_info['usagePercent']:.2f}%")
+/// ```
+#[pyfunction]
+pub fn get_jvm_memory_usage(py: Python) -> PyResult<Py<PyAny>> {
+    let json_str = ecore::get_jvm_memory_usage()
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{:?}", e)))?;
+
+    // Parse JSON string to Python dict
+    let json_module = py.import("json")?;
+    let dict = json_module.call_method1("loads", (json_str,))?;
+
+    Ok(dict.into())
+}
+
+/// Trigger JVM garbage collection manually
+///
+/// NOTE: This is a suggestion to the JVM, not a guarantee that GC will run immediately.
+/// Use sparingly as it may impact performance.
+///
+/// Returns a dictionary with GC result:
+/// - success: Whether GC was triggered
+/// - freedMemoryMB: Approximate memory freed in MB
+/// - beforeMB: Memory usage before GC in MB
+/// - afterMB: Memory usage after GC in MB
+///
+/// # Example
+/// ```python
+/// from extractous import trigger_jvm_gc
+///
+/// result = trigger_jvm_gc()
+/// print(f"Freed {result['freedMemoryMB']} MB")
+/// ```
+#[pyfunction]
+pub fn trigger_jvm_gc(py: Python) -> PyResult<Py<PyAny>> {
+    let json_str = ecore::trigger_jvm_gc()
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{:?}", e)))?;
+
+    // Parse JSON string to Python dict
+    let json_module = py.import("json")?;
+    let dict = json_module.call_method1("loads", (json_str,))?;
+
+    Ok(dict.into())
+}

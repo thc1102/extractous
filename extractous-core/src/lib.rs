@@ -88,3 +88,6 @@ mod tika {
     pub use parse::*;
     pub use wrappers::JReaderInputStream;
 }
+
+// Public utility functions for JVM memory management
+pub use tika::{get_jvm_memory_usage, trigger_jvm_gc};

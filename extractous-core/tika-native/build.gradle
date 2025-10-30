@@ -74,8 +74,12 @@ dependencies {
     implementation "org.apache.tika:tika-parser-webarchive-module:$tikaVersion"
     implementation 'com.sun.mail:jakarta.mail:2.0.1'
 
+    // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter:5.9.3'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Jackson for JSON parsing in tests (for memory management tests)
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
 }
 
 test {

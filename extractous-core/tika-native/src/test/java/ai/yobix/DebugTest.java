@@ -52,6 +52,7 @@ public class DebugTest {
         int totalDocuments = 0;
         long totalContentLength = 0;
         long startTime = System.currentTimeMillis();
+        int gcTriggered = 0;
 
         void printSummary() {
             long duration = System.currentTimeMillis() - startTime;
@@ -64,6 +65,7 @@ public class DebugTest {
             System.out.println("  ⊘ Skipped: " + skippedFiles);
             System.out.println("Total documents extracted: " + totalDocuments);
             System.out.println("Total content length: " + totalContentLength + " chars");
+            System.out.println("GC triggered: " + gcTriggered + " times");
             System.out.println("Processing time: " + duration + " ms");
             System.out.println("=".repeat(70));
         }
@@ -109,6 +111,14 @@ public class DebugTest {
         }
         System.out.println("=".repeat(70));
 
+        // ===================================================================
+        // Test memory management methods (for GraalVM metadata collection)
+        // ===================================================================
+        System.out.println("\n[MEMORY MANAGEMENT TEST]");
+        System.out.println("-".repeat(70));
+        testMemoryManagement();
+        System.out.println();
+
         // Create parser configurations
         PDFParserConfig pdfConfig = new PDFParserConfig();
         OfficeParserConfig officeConfig = new OfficeParserConfig();
@@ -129,10 +139,92 @@ public class DebugTest {
                 System.out.println("\n[" + (i + 1) + "/" + files.size() + "] Processing: " + file.getName());
                 System.out.println("  Path: " + file.getAbsolutePath());
                 processSingleFile(file.getAbsolutePath(), pdfConfig, officeConfig, tesseractConfig, stats);
+
+                // Check memory every 5 files and trigger GC if needed
+                if ((i + 1) % 5 == 0) {
+                    checkMemoryAndGC(stats);
+                }
             }
         }
 
+        // Final memory check
+        System.out.println("\n[FINAL MEMORY CHECK]");
+        System.out.println("-".repeat(70));
+        checkMemoryAndGC(stats);
+
         stats.printSummary();
+    }
+
+    /**
+     * Test memory management methods (getMemoryUsage and triggerGarbageCollection)
+     * This ensures GraalVM agent captures metadata for these methods
+     */
+    private static void testMemoryManagement() {
+        try {
+            // Test 1: Get memory usage
+            System.out.println("Testing getMemoryUsage()...");
+            StringResult memoryResult = TikaNativeMain.getMemoryUsage();
+
+            if (memoryResult.isError()) {
+                System.err.println("  ❌ Error getting memory usage: " + memoryResult.getErrorMessage());
+            } else {
+                System.out.println("  ✓ Memory usage retrieved successfully");
+                System.out.println("    JSON: " + memoryResult.getContent());
+            }
+
+            // Test 2: Trigger garbage collection
+            System.out.println("\nTesting triggerGarbageCollection()...");
+            StringResult gcResult = TikaNativeMain.triggerGarbageCollection();
+
+            if (gcResult.isError()) {
+                System.err.println("  ❌ Error triggering GC: " + gcResult.getErrorMessage());
+            } else {
+                System.out.println("  ✓ GC triggered successfully");
+                System.out.println("    JSON: " + gcResult.getContent());
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ Exception during memory management test: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Check memory usage and trigger GC if needed
+     * Called periodically during file processing
+     */
+    private static void checkMemoryAndGC(Statistics stats) {
+        try {
+            StringResult memoryResult = TikaNativeMain.getMemoryUsage();
+
+            if (!memoryResult.isError()) {
+                String content = memoryResult.getContent();
+                System.out.println("Memory status: " + content);
+
+                // Parse usage percent (simple string parsing)
+                // Expected format: {"usedMemoryMB":45.23,...,"usagePercent":8.83}
+                if (content.contains("usagePercent")) {
+                    int percentIdx = content.indexOf("usagePercent\":") + "usagePercent\":".length();
+                    int endIdx = content.indexOf("}", percentIdx);
+                    String percentStr = content.substring(percentIdx, endIdx);
+                    double usagePercent = Double.parseDouble(percentStr);
+
+                    // Trigger GC if usage exceeds 70%
+                    if (usagePercent > 70.0) {
+                        System.out.println("⚠️  Memory usage exceeds 70%, triggering GC...");
+                        StringResult gcResult = TikaNativeMain.triggerGarbageCollection();
+
+                        if (!gcResult.isError()) {
+                            System.out.println("✓ GC completed: " + gcResult.getContent());
+                            stats.gcTriggered++;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignore errors during memory check (not critical)
+            System.err.println("Warning: Could not check memory: " + e.getMessage());
+        }
     }
 
     /**

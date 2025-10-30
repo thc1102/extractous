@@ -380,6 +380,44 @@ pub fn parse_file_recursive(
     )
 }
 
+/// Gets current JVM memory usage statistics
+/// Returns a JSON string with memory information
+pub fn get_jvm_memory_usage() -> ExtractResult<String> {
+    let mut env = get_vm_attach_current_thread()?;
+
+    let call_result = jni_call_static_method(
+        &mut env,
+        "ai/yobix/TikaNativeMain",
+        "getMemoryUsage",
+        "()Lai/yobix/StringResult;",
+        &[],
+    );
+    let call_result_obj = call_result?.l()?;
+
+    // Create and process the JStringResult
+    let result = JStringResult::new(&mut env, call_result_obj)?;
+    Ok(result.content)
+}
+
+/// Triggers Java garbage collection
+/// Returns a JSON string with GC result information
+pub fn trigger_jvm_gc() -> ExtractResult<String> {
+    let mut env = get_vm_attach_current_thread()?;
+
+    let call_result = jni_call_static_method(
+        &mut env,
+        "ai/yobix/TikaNativeMain",
+        "triggerGarbageCollection",
+        "()Lai/yobix/StringResult;",
+        &[],
+    );
+    let call_result_obj = call_result?.l()?;
+
+    // Create and process the JStringResult
+    let result = JStringResult::new(&mut env, call_result_obj)?;
+    Ok(result.content)
+}
+
 /// 递归解析字节数组，返回容器文档及所有嵌套文档
 pub fn parse_bytes_recursive(
     buffer: &[u8],

@@ -143,6 +143,58 @@ reader, metadata = extractor.extract_file("document.docx")
 # 这将从图片、嵌入文件等中提取文本
 ```
 
+### JVM 内存管理
+
+监控和管理 JVM 内存使用：
+
+#### 获取内存使用统计
+
+```python
+from extractous import get_jvm_memory_usage
+
+# 获取当前 JVM 内存使用情况
+memory_info = get_jvm_memory_usage()
+print(f"已使用: {memory_info['usedMemoryMB']:.2f} MB")
+print(f"空闲: {memory_info['freeMemoryMB']:.2f} MB")
+print(f"总计: {memory_info['totalMemoryMB']:.2f} MB")
+print(f"最大: {memory_info['maxMemoryMB']:.2f} MB")
+print(f"使用率: {memory_info['usagePercent']:.2f}%")
+```
+
+#### 触发垃圾回收
+
+```python
+from extractous import trigger_jvm_gc
+
+# 手动触发 JVM 垃圾回收
+result = trigger_jvm_gc()
+print(f"成功: {result['success']}")
+print(f"释放: {result['freedMemoryMB']} MB")
+print(f"之前: {result['beforeMB']} MB")
+print(f"之后: {result['afterMB']} MB")
+```
+
+#### 内存监控工作流
+
+```python
+from extractous import Extractor, get_jvm_memory_usage, trigger_jvm_gc
+
+extractor = Extractor()
+
+# 在批量处理期间监控内存
+for file_path in file_list:
+    # 提取文件
+    result, metadata = extractor.extract_file_to_string(file_path)
+    
+    # 检查内存使用情况
+    memory_info = get_jvm_memory_usage()
+    if memory_info['usagePercent'] > 70.0:
+        print(f"⚠️  内存使用率过高: {memory_info['usagePercent']:.2f}%")
+        # 触发垃圾回收
+        gc_result = trigger_jvm_gc()
+        print(f"✅ GC 释放了 {gc_result['freedMemoryMB']} MB")
+```
+
 ## API 参考
 
 ### 主要方法

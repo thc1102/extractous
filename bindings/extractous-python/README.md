@@ -143,3 +143,55 @@ extractor = Extractor().set_extract_embedded(True)
 reader, metadata = extractor.extract_file("document.docx")
 # This will extract text from images, embedded files, etc.
 ```
+
+### JVM Memory Management
+
+Monitor and manage JVM memory usage:
+
+#### Get Memory Usage Statistics
+
+```python
+from extractous import get_jvm_memory_usage
+
+# Get current JVM memory usage
+memory_info = get_jvm_memory_usage()
+print(f"Used: {memory_info['usedMemoryMB']:.2f} MB")
+print(f"Free: {memory_info['freeMemoryMB']:.2f} MB")
+print(f"Total: {memory_info['totalMemoryMB']:.2f} MB")
+print(f"Max: {memory_info['maxMemoryMB']:.2f} MB")
+print(f"Usage: {memory_info['usagePercent']:.2f}%")
+```
+
+#### Trigger Garbage Collection
+
+```python
+from extractous import trigger_jvm_gc
+
+# Manually trigger JVM garbage collection
+result = trigger_jvm_gc()
+print(f"Success: {result['success']}")
+print(f"Freed: {result['freedMemoryMB']} MB")
+print(f"Before: {result['beforeMB']} MB")
+print(f"After: {result['afterMB']} MB")
+```
+
+#### Memory Monitoring Workflow
+
+```python
+from extractous import Extractor, get_jvm_memory_usage, trigger_jvm_gc
+
+extractor = Extractor()
+
+# Monitor memory during batch processing
+for file_path in file_list:
+    # Extract file
+    result, metadata = extractor.extract_file_to_string(file_path)
+    
+    # Check memory usage
+    memory_info = get_jvm_memory_usage()
+    if memory_info['usagePercent'] > 70.0:
+        print(f"⚠️  High memory usage: {memory_info['usagePercent']:.2f}%")
+        # Trigger garbage collection
+        gc_result = trigger_jvm_gc()
+        print(f"✅ GC freed {gc_result['freedMemoryMB']} MB")
+```
